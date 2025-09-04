@@ -1,0 +1,5 @@
+openai==1.105.0
+python-dotenv==1.1.1
+streamlit==1.49.1
+tiktoken==0.11.0
+transformers==4.56.0
