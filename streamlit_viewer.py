@@ -49,7 +49,7 @@ h3 {
 
 
 # --- 설정값 ---
-DATASET_PATH = "09-01-SFT/gpt_dataset/GPT-sft-09-03-val.jsonl"
+DATASET_PATH = "GPT-sft-09-03-val.jsonl"
 # OpenAI fine-tuned model 기본값 (필요 시 사이드바에서 변경)
 MODEL_NAME = "ft:gpt-4.1-2025-04-14:ksat-agent:exp-09-03-large:CBdqVMpr"
 
