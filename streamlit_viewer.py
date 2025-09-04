@@ -358,10 +358,9 @@ async def stream_and_render():
         except Exception:
             pass
 
-        # 이벤트를 순차적으로 쌓아갈 컨테이너 (익스팬더 사용을 위해)
-        with placeholder.container():
-            stack_container = st.container()
-
+        # 각 이벤트마다 새로운 컨테이너를 생성해서 복제 문제 방지
+        event_containers = []
+        
         async for event in run_tool_call_flow_streaming(
             model_name=model_name,
             system_prompt=system_prompt,
@@ -371,31 +370,46 @@ async def stream_and_render():
             presence_penalty=presence_penalty,
         ):
             etype = event.get("type")
-
-            if etype == "think":
-                with stack_container:
-                    st.markdown("### 🤔 Reasoning:")
-                    st.markdown(f'<div class="passage-font">{format_text_to_html((event.get("content") or "").strip())}</div>', unsafe_allow_html=True)
-            elif etype == "tool_output":
-                out_text = (event.get("content") or "").strip()
-                input_text = (event.get("input") or "").strip()
-                with stack_container:
-                    st.markdown("### 🔍 Request for Expert")
-                    with st.expander("📤 Question to Expert", expanded=False):
-                        st.markdown(input_text)
-                    with st.expander("🧠 Expert's response", expanded=False):
-                        st.markdown(out_text)
-
-            elif etype == "final":
-                final_text = (event.get("content") or "").strip()
-                with stack_container:
-                    st.markdown("### ✅ Final Response:")
-                    st.markdown(f'<div class="passage-font">{format_text_to_html(final_text)}</div>', unsafe_allow_html=True)
-                # 최종 응답이 한 번이라도 나타나면 스트리밍 종료
-                break
+            
+            # 기존 placeholder를 비우고 새로운 컨테이너 생성
+            with placeholder.container():
+                # 이전 이벤트들을 다시 렌더링
+                for prev_event in event_containers:
+                    render_event(prev_event)
+                
+                # 현재 이벤트 렌더링
+                render_event(event)
+                
+                # 이벤트 저장
+                event_containers.append(event)
+                
+                if etype == "final":
+                    break
 
     except Exception as e:
         st.error(f"모델 호출 또는 스트리밍 중 오류 발생: {e}")
+
+
+def render_event(event):
+    """개별 이벤트를 렌더링하는 함수"""
+    etype = event.get("type")
+    
+    if etype == "think":
+        st.markdown("### 🤔 Reasoning:")
+        st.markdown(f'<div class="passage-font">{format_text_to_html((event.get("content") or "").strip())}</div>', unsafe_allow_html=True)
+        
+    elif etype == "tool_output":
+        out_text = (event.get("content") or "").strip()
+        input_text = (event.get("input") or "").strip()
+        st.markdown("### 🔍 Request for Expert")
+        with st.expander("📤 Question to Expert", expanded=False):
+            st.markdown(input_text)
+        with st.expander("🧠 Expert's response", expanded=False):
+            st.markdown(out_text)
+
+    elif etype == "final":
+        st.markdown("### ✅ Final Response:")
+        st.markdown(f'<div class="passage-font">{format_text_to_html((event.get("content") or "").strip())}</div>', unsafe_allow_html=True)
 
 
 if run_button:
