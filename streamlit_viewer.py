@@ -114,7 +114,7 @@ tokenizer_path = st.sidebar.text_input("토크나이저 경로 (옵션)", value=
 
 st.sidebar.divider()
 st.sidebar.subheader("생성 파라미터")
-temperature = st.sidebar.slider("Temperature", 0.0, 1.5, 0.8, 0.05)
+temperature = st.sidebar.slider("Temperature", 0.0, 1.5, 0.9, 0.05)
 top_p = st.sidebar.slider("Top P", 0.0, 1.0, 0.95, 0.05)
 presence_penalty = st.sidebar.slider("Presence Penalty", -1.0, 1.0, 0.0, 0.05)
 
