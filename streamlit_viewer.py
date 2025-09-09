@@ -570,13 +570,13 @@ with col1:
         # Temperature 섹션 (프롬프트 아래로 이동)
         with st.container(border=True):
             st.markdown("**Temperature**")
-            st.markdown("지문 생성의 다양성을 조절하는 파라미터입니다. 높을수록 지문의 내용이 다채롭지만, 다소 산만하고 일관성이 떨어질 수 있습니다.\n(기본값: 0.9)")
+            st.markdown("다양성을 조절하는 파라미터입니다. 높을수록 지문의 내용이 다채롭지만, 다소 산만하고 일관성이 떨어질 수 있습니다.\n(기본값: 0.85)")
             
             # Temperature 초기값 설정
             if "temperature" not in st.session_state:
-                st.session_state.temperature = 0.9
+                st.session_state.temperature = 0.85
                 
-            temperature = st.slider("", 0.6, 1.2, st.session_state.temperature, 0.05, key="temp_slider")
+            temperature = st.slider("", 0.5, 1.2, st.session_state.temperature, 0.05, key="temp_slider")
             
             # slider 값이 변경되면 session_state 업데이트
             st.session_state.temperature = temperature
@@ -640,7 +640,7 @@ def parse_expert_calls(text: str) -> tuple[str, list[str]]:
     """
     expert_calls = []
     
-    # <expert>...</expert> 패턴 찾기
+    # <expert>...</expert> 패턴 찾기 
     expert_pattern = r'<expert>(.*?)</expert>'
     expert_matches = re.findall(expert_pattern, text, re.DOTALL)
     
