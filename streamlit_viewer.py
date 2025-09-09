@@ -136,8 +136,23 @@ EXPERT_PROMPT = """
 def get_vertex_ai_credentials():
     """Vertex AI 인증 토큰을 가져옵니다."""
     try:
-        # 1. 먼저 gcloud CLI 인증 시도 (가장 편리함)
-        # GOOGLE_APPLICATION_CREDENTIALS가 설정되어 있으면 임시로 해제
+        # 1. Streamlit Cloud Secrets에서 JSON 문자열로 제공되는 서비스 계정 키 처리
+        if hasattr(st, 'secrets') and "GOOGLE_APPLICATION_CREDENTIALS_JSON" in st.secrets:
+            import json
+            from google.oauth2 import service_account
+            
+            try:
+                creds_json = json.loads(st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+                credentials = service_account.Credentials.from_service_account_info(
+                    creds_json, 
+                    scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                )
+                credentials.refresh(google.auth.transport.requests.Request())
+                return credentials.token
+            except Exception as e:
+                st.error(f"Streamlit Secrets 인증 실패: {e}")
+        
+        # 2. 로컬 환경에서 gcloud CLI 인증 시도
         original_creds = os.environ.pop('GOOGLE_APPLICATION_CREDENTIALS', None)
         
         try:
@@ -145,13 +160,12 @@ def get_vertex_ai_credentials():
             credentials.refresh(google.auth.transport.requests.Request())
             return credentials.token
         finally:
-            # 원래 설정이 있었다면 복원 (다른 앱에 영향을 주지 않기 위해)
             if original_creds:
                 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = original_creds
                 
     except Exception as e:
-        # 2. gcloud 인증 실패 시, 환경변수 인증 재시도
-        if original_creds and os.path.exists(original_creds):
+        # 3. gcloud 인증 실패 시, 환경변수 인증 재시도
+        if 'original_creds' in locals() and original_creds and os.path.exists(original_creds):
             try:
                 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = original_creds
                 credentials, _ = default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
@@ -164,21 +178,26 @@ def get_vertex_ai_credentials():
         st.error(f"Vertex AI 인증 실패: {e}")
         with st.expander("🔧 인증 설정 방법", expanded=True):
             st.markdown("""
-            **추천 방법 (한 번만 설정):**
+            **Streamlit Cloud 배포 시:**
+            1. Settings > Secrets에서 다음 추가:
+            ```toml
+            GOOGLE_APPLICATION_CREDENTIALS_JSON = '''
+            {
+              "type": "service_account",
+              "project_id": "your-project-id",
+              ...전체 서비스 계정 키 JSON...
+            }
+            '''
+            ```
+            
+            **로컬 개발 시:**
             ```bash
             gcloud auth application-default login
             ```
             
-            **또는 서비스 계정 키 사용:**
-            1. GCP 콘솔에서 서비스 계정 키 다운로드
-            2. 환경변수 설정:
+            **또는 서비스 계정 키 파일:**
             ```bash
             export GOOGLE_APPLICATION_CREDENTIALS="키파일경로.json"
-            ```
-            
-            **또는 .env 파일에 추가:**
-            ```
-            GOOGLE_APPLICATION_CREDENTIALS=키파일경로.json
             ```
             """)
         return None

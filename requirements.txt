@@ -12,3 +12,4 @@ streamlit-browser-session-storage
 aiohttp
 google-auth
 Pillow
+google-auth-oauthlib
