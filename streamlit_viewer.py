@@ -6,6 +6,7 @@ from openai import AsyncOpenAI, OpenAI
 import os
 import aiohttp
 import requests
+import re
 from dotenv import load_dotenv
 from google.auth import default
 import google.auth.transport.requests
@@ -18,6 +19,8 @@ if not os.getenv("OPENAI_API_KEY"):
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 
 from transformers import AutoTokenizer
+from PIL import Image
+import base64
 
 # --- 페이지 기본 설정 ---
 st.set_page_config(
@@ -25,6 +28,16 @@ st.set_page_config(
     page_title="모델 지문 생성 뷰어",
     initial_sidebar_state="collapsed"
 )
+
+# --- 로고를 base64로 인코딩하여 HTML에 직접 삽입 ---
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# 로고 이미지를 base64로 인코딩
+img_base64 = get_base64_of_bin_file("logo_kangnam_202111.png")
+
 
 # --- 사용자 정의 CSS ---
 st.markdown("""
@@ -56,6 +69,18 @@ h3 {
     text-indent: 1em; /* 각 문단의 첫 줄 들여쓰기 */
     margin-bottom: 0em;
 }
+.passage-font-no-border {
+    padding: 10px;
+    margin-bottom: 20px;
+    font-family: 'Nanum Myeongjo', serif !important;
+    line-height: 1.7;
+    letter-spacing: -0.01em;
+    font-weight: 500;
+}
+.passage-font-no-border p {
+    text-indent: 1em; /* 각 문단의 첫 줄 들여쓰기 */
+    margin-bottom: 0em;
+}
 .question-font {
     font-family: 'Nanum Myeongjo', serif !important;
     line-height: 1.7em;
@@ -68,7 +93,7 @@ h3 {
     overflow-y: auto;
     border: 0.5px solid black;
     border-radius: 0px;
-    padding: 15px;
+    padding: 5px;
     background-color: white;
 }
 </style>
@@ -397,7 +422,6 @@ def format_prompt_from_components(field: str, type_info: str, topic: str) -> str
 
 # --- 사이드바 (높이 자동 감지) ---
 with st.sidebar:
-    
     # 스트리밍 중이 아닐 때만 높이 감지
     if not st.session_state.get("is_streaming", False):
         try:
@@ -419,11 +443,19 @@ with st.sidebar:
             if "viewport_height" not in st.session_state:
                 st.session_state.viewport_height = 800  # 기본값 설정
 
-    # 현재 감지된 높이 표시 (디버그용)
-    if "viewport_height" in st.session_state:
-        st.info(f"화면 높이: {st.session_state.viewport_height}px")
-        # 계산된 컨테이너 높이도 표시 (아래에서 계산될 예정)
-        pass
+    # 높이 감지는 하지만 표시하지 않음
+
+# --- 메인 페이지 로고 & 타이틀 (상단) ---
+st.markdown(f"""
+<div style="display: flex; justify-content: flex-start; align-items: center; margin-bottom: 20px;">
+    <img src="data:image/png;base64,{img_base64}" 
+         style="width: 170px; height: auto; pointer-events: none; user-select: none; margin-right: 30px;" 
+         alt="강남대성수능연구소 로고">
+    <div class="passage-font-no-border" style="margin: 0; padding: 0; font-size: 40px; font-weight: 700;">
+        AI Model Preview
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # --- 동적 높이 계산 ---
 # 기본 높이 600px, 감지된 높이가 있으면 적절히 조절
@@ -455,13 +487,8 @@ with col1:
     with st.container(border=True, height=container_height):        
         # 모델 선택 섹션
         with st.container(border=True):
-            st.markdown("**모델 선택**")
-            model_name = st.selectbox("모델", ["KSAT Psg Flash (Preview 0908)"], index=0)
-        
-        # 생성 파라미터 섹션
-        with st.container(border=True):
-            st.markdown("**생성 파라미터**")
-            temperature = st.slider("Temperature", 0.0, 1.5, 0.9, 0.05)
+            st.markdown("**AI 모델 선택**")
+            model_name = st.selectbox("모델명", ["KSAT Psg Flash (Preview 0908)"], index=0)
         
         # 입력 프롬프트 섹션
         with st.container(border=True):
@@ -495,7 +522,7 @@ with col1:
                                 st.markdown(f'<div class="passage-font">{format_text_to_html(expected_response)}</div>', unsafe_allow_html=True)
                         
                         # Preset 탭 실행 버튼
-                        preset_run_button = st.button("🚀 Preset으로 지문 생성", type="primary", use_container_width=True, key="preset_run")
+                        preset_run_button = st.button("지문 생성", type="primary", use_container_width=True, key="preset_run")
                     else:
                         st.error("선택된 샘플의 프롬프트를 파싱할 수 없습니다.")
                         preset_run_button = False
@@ -515,18 +542,32 @@ with col1:
                 
                 custom_type = st.selectbox("유형", ["단일형", "(가), (나) 분리형"], index=0, key="custom_type")
                 custom_topic = st.text_area("주제", value="", height=100, 
-                                          placeholder="예: 의식의 지향성에 대한 후설의 현상학과 데넷의 지향계 이론 비교",
+                                          placeholder="여기에 원하는 주제를 입력해주세요.",
                                           key="custom_topic")
                 
                 # Custom 탭 실행 버튼
-                custom_run_button = st.button("🚀 Custom으로 지문 생성", type="primary", use_container_width=True, key="custom_run")
+                custom_run_button = st.button("지문 생성", type="primary", use_container_width=True, key="custom_run")
+        
+        # Temperature 섹션 (프롬프트 아래로 이동)
+        with st.container(border=True):
+            st.markdown("**Temperature**")
+            st.markdown("지문 생성의 다양성을 조절하는 파라미터입니다. 높을수록 지문의 내용이 다채롭지만, 다소 산만하고 일관성이 떨어질 수 있습니다.\n(기본값: 0.9)")
+            
+            # Temperature 초기값 설정
+            if "temperature" not in st.session_state:
+                st.session_state.temperature = 0.9
+                
+            temperature = st.slider("", 0.6, 1.2, st.session_state.temperature, 0.05, key="temp_slider")
+            
+            # slider 값이 변경되면 session_state 업데이트
+            st.session_state.temperature = temperature
 
 # 두 번째 컬럼: Reasoning & Expert Response
 with col2:
     st.markdown("#### 2. 모델 사고 과정")
     with st.container(border=True, height=container_height):
         reasoning_placeholder = st.empty()
-        reasoning_placeholder.info("추론 과정과 전문가 응답이 여기에 표시됩니다.")
+        reasoning_placeholder.info("AI 모델의 사고 과정이 여기에 표시됩니다.")
 
 # 세 번째 컬럼: Final Response
 with col3:
@@ -673,6 +714,9 @@ async def run_vertex_ai_flow_streaming(endpoint_id: str, project_id: str, locati
                     yield {"type": "think", "content": remaining_text}
                 
                 for expert_input in expert_calls:
+                    # 전문가 질의 시작 이벤트 (질의 내용 먼저 표시)
+                    yield {"type": "tool_start", "input": expert_input}
+                    
                     # 전문가 함수 호출 (일반 Gemini API 사용)
                     expert_result = await execute_request_for_expert(expert_input)
                     
@@ -682,7 +726,7 @@ async def run_vertex_ai_flow_streaming(endpoint_id: str, project_id: str, locati
                         "content": expert_result
                     })
                     
-                    # 스트리밍으로 전문가 호출 과정 표시
+                    # 스트리밍으로 전문가 응답 표시
                     yield {"type": "tool_output", "content": expert_result, "input": expert_input}
                 
                 # <passage> 태그가 있으면 최종 응답으로 처리하고 종료
@@ -724,6 +768,35 @@ async def run_vertex_ai_flow_streaming(endpoint_id: str, project_id: str, locati
 
 
 
+# --- 타이핑 효과 함수 ---
+async def typing_effect(text: str, placeholder, is_final: bool = False):
+    """텍스트를 토큰 단위로 타이핑 효과를 내며 표시"""
+    if not text:
+        return
+    
+    # 단어 단위로 분할 (한국어와 영어 모두 고려)
+    tokens = re.findall(r'\S+|\s+', text)
+    
+    displayed_text = ""
+    for i, token in enumerate(tokens):
+        displayed_text += token
+        
+        if is_final:
+            # 최종 응답은 HTML 형식으로 표시
+            final_response_content = f'<div class="final-response-container"><div class="passage-font-no-border">{format_text_to_html(displayed_text.strip())}</div></div>'
+            placeholder.markdown(final_response_content, unsafe_allow_html=True)
+        else:
+            # 작가 모델 사고과정은 일반 마크다운으로 표시
+            placeholder.markdown(displayed_text.strip() + " ▊")  # 커서 추가
+        
+        # 타이핑 속도 조절 (토큰 길이에 따라 조절)
+        if len(token.strip()) > 0:  # 실제 내용이 있는 토큰만
+            await asyncio.sleep(0.01)  # 30ms 딜레이
+    
+    # 최종적으로 커서 제거
+    if not is_final:
+        placeholder.markdown(displayed_text.strip())
+
 # --- 스트리밍 실행 로직 ---
 async def stream_and_render(final_user_prompt: str, selected_system_prompt: str):
     # 스트리밍 시작
@@ -739,6 +812,12 @@ async def stream_and_render(final_user_prompt: str, selected_system_prompt: str)
         project_id = PROJECT_ID
         location = LOCATION
         
+        # 동적으로 섹션을 추가할 메인 컨테이너
+        with reasoning_placeholder.container():
+            reasoning_main = st.container()
+            
+        expert_containers = {}  # 전문가 질의별 메인 컨테이너 저장
+        
         async for event in run_vertex_ai_flow_streaming(
             endpoint_id=endpoint_id,
             project_id=project_id,
@@ -749,38 +828,50 @@ async def stream_and_render(final_user_prompt: str, selected_system_prompt: str)
         ):
             etype = event.get("type")
             
-            # 최종 이벤트는 따로 저장
-            if etype == "final":
-                final_content = event.get("content", "")
-            else:
-                # 시간순으로 이벤트 추가
-                all_events.append(event)
+            if etype == "think":
+                # 작가 모델 사고 과정 - 타이핑 효과 적용
+                think_content = event.get("content", "").strip()
+                if think_content:
+                    with reasoning_main:
+                        st.markdown("#### 작가 모델의 사고 과정")
+                        thinking_placeholder = st.empty()
+                    
+                    # 타이핑 효과로 표시
+                    await typing_effect(think_content, thinking_placeholder, is_final=False)
             
-            # 두 번째 컬럼: Reasoning & Expert Response 순서대로 렌더링 (일반 폰트)
-            with reasoning_placeholder.container():
-                for event in all_events:
-                    event_type = event.get("type")
-                    
-                    if event_type == "think":
-                        st.markdown("### 🤔 Reasoning:")
-                        st.markdown((event.get("content") or "").strip())
-                    
-                    elif event_type == "tool_output":
-                        out_text = (event.get("content") or "").strip()
-                        input_text = (event.get("input") or "").strip()
-                        st.markdown("### 🔍 Request for Expert")
-                        with st.expander("📤 Question to Expert", expanded=False):
+            elif etype == "tool_start":
+                # 전문가 질의 시작 - 질의 내용만 먼저 표시
+                input_text = (event.get("input") or "").strip()
+                
+                with reasoning_main:
+                    expert_section = st.container()
+                    with expert_section:
+                        st.markdown("#### 전문가 모델에게 질의하기")
+                        
+                        # 질의 내용만 표시
+                        with st.expander("질문 내용", expanded=False):
                             st.markdown(input_text)
-                        with st.expander("🧠 Expert's response", expanded=False):
+                    
+                    # 이 섹션을 저장해두어서 나중에 응답을 추가할 수 있도록 함
+                    expert_containers[input_text] = expert_section
+            
+            elif etype == "tool_output":
+                # 전문가 응답 완료 - 응답 익스팬더를 새로 생성
+                out_text = (event.get("content") or "").strip()
+                input_text = (event.get("input") or "").strip()
+                
+                # 해당 질의에 대한 컨테이너 찾아서 응답 추가
+                if input_text in expert_containers:
+                    with expert_containers[input_text]:
+                        # 응답 내용 익스팬더를 새로 생성
+                        with st.expander("응답 내용", expanded=False):
                             st.markdown(out_text)
             
-            # 세 번째 컬럼: Final Response 렌더링 (헤더 없음)
-            if final_content:
-                final_response_content = f'<div class="final-response-container"><div class="passage-font">{format_text_to_html(final_content.strip())}</div></div>'
-                final_placeholder.markdown(final_response_content, unsafe_allow_html=True)
-            
-            # 최종 이벤트면 종료
-            if etype == "final":
+            elif etype == "final":
+                # 최종 응답 - 타이핑 효과 적용
+                final_content = event.get("content", "").strip()
+                if final_content:
+                    await typing_effect(final_content, final_placeholder, is_final=True)
                 break
 
     except Exception as e:

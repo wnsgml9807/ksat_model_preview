@@ -1,0 +1,17 @@
+[theme]
+# Primary colors - 검정색으로 변경
+primaryColor = "#000000"
+
+# Background colors - 깔끔한 흰색으로 변경
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F5F5"
+
+# Text color - 검정색으로 변경
+textColor = "#000000"
+
+# Font
+font = "sans serif"
+
+[server]
+# 개발 모드에서 파일 변경 감지
+fileWatcherType = "poll"
