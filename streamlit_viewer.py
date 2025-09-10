@@ -7,11 +7,23 @@ import os
 import aiohttp
 import requests
 import re
+import logging
+from datetime import datetime
 from dotenv import load_dotenv
 from google.auth import default
 import google.auth.transport.requests
 
 load_dotenv()
+
+# --- 로거 설정 ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("KSAT_Model_Preview")
 
 if not os.getenv("GOOGLE_API_KEY"):
     os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
@@ -25,7 +37,7 @@ import base64
 # --- 페이지 기본 설정 ---
 st.set_page_config(
     layout="wide", 
-    page_title="모델 지문 생성 뷰어",
+    page_title="AI Model Preview",
     initial_sidebar_state="collapsed"
 )
 
@@ -576,7 +588,7 @@ with col1:
             if "temperature" not in st.session_state:
                 st.session_state.temperature = 0.85
                 
-            temperature = st.slider("", 0.5, 1.2, st.session_state.temperature, 0.05, key="temp_slider")
+            temperature = st.slider("Temperature", 0.5, 1.2, st.session_state.temperature, 0.05, key="temp_slider", label_visibility="collapsed")
             
             # slider 값이 변경되면 session_state 업데이트
             st.session_state.temperature = temperature
@@ -891,6 +903,10 @@ async def stream_and_render(final_user_prompt: str, selected_system_prompt: str)
                 final_content = event.get("content", "").strip()
                 if final_content:
                     await typing_effect(final_content, final_placeholder, is_final=True)
+                    # 최종 지문 로깅
+                    logger.info(f"=== 최종 지문 생성 완료 ===")
+                    logger.info(f"생성된 지문 (길이: {len(final_content)}자):\n{final_content}")
+                    logger.info(f"=" * 50)
                 break
 
     except Exception as e:
@@ -908,6 +924,13 @@ if 'preset_run_button' in locals() and preset_run_button:
     if 'system_prompt' in locals() and 'user_prompt' in locals() and system_prompt and user_prompt:
         final_user_prompt = user_prompt  # 원본 프롬프트 사용
         selected_system_prompt = system_prompt
+        
+        # 입력 프롬프트 로깅
+        logger.info(f"=== Preset 지문 생성 시작 ===")
+        logger.info(f"입력 프롬프트:\n{final_user_prompt}")
+        logger.info(f"현재 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Temperature: {st.session_state.get('temperature', 0.85)}")
+        
         # 스트리밍 함수 실행
         asyncio.run(stream_and_render(final_user_prompt, selected_system_prompt))
     else:
@@ -925,6 +948,15 @@ if 'custom_run_button' in locals() and custom_run_button:
         custom_type_content = st.session_state.get("custom_type", "단일형")
         
         final_user_prompt = format_prompt_from_components(custom_field_content, custom_type_content, custom_topic_content)
+        
+        # 입력 프롬프트 로깅
+        logger.info(f"=== Custom 지문 생성 시작 ===")
+        logger.info(f"분야: {custom_field_content}")
+        logger.info(f"유형: {custom_type_content}")
+        logger.info(f"주제: {custom_topic_content}")
+        logger.info(f"입력 프롬프트:\n{final_user_prompt}")
+        logger.info(f"현재 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Temperature: {st.session_state.get('temperature', 0.85)}")
         
         # 기본 시스템 프롬프트 사용 (첫 번째 샘플에서 추출)
         default_system_prompt, _, _ = load_sample(0)
